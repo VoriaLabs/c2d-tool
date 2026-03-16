@@ -4,6 +4,8 @@ import shutil
 import sqlite3
 import zlib
 import json
+import io
+from contextlib import redirect_stderr
 from c2d_tool.c2d import C2DFile
 from c2d_tool.dxf import DXFImporter
 from c2d_tool.main import main
@@ -68,6 +70,70 @@ class TestIntegration(unittest.TestCase):
         data = c2d._read_item_data(rows[0]['data'])
         self.assertEqual(data['layer']['name'], "TestLayer")
         self.assertEqual(data['geometryType'], "path")
+
+    def test_min_closed_area_default_filters_small_closed_shapes(self):
+        import ezdxf
+
+        doc = ezdxf.new()
+        msp = doc.modelspace()
+        msp.add_line((0, 0), (10, 10))
+        msp.add_lwpolyline([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)], close=True)  # area 0.01
+        msp.add_lwpolyline([(0, 0), (1, 0), (1, 1), (0, 1)], close=True)  # area 1.0
+        msp.add_circle((20, 20), radius=0.1)  # area ~= 0.0314
+        msp.add_circle((30, 30), radius=1.0)  # area ~= 3.1415
+        doc.saveas(self.test_dxf)
+
+        test_args = ["c2d-tool", self.test_c2d, "--import-to-layer", "TestLayer", self.test_dxf]
+        stderr_buffer = io.StringIO()
+        with patch.object(sys, 'argv', test_args):
+            with redirect_stderr(stderr_buffer):
+                main()
+
+        stderr_output = stderr_buffer.getvalue()
+        self.assertIn("Skipping closed shape LWPOLYLINE", stderr_output)
+        self.assertIn("Skipping closed shape CIRCLE", stderr_output)
+
+        c2d = C2DFile(self.test_c2d)
+        c2d.load()
+        c2d.cursor.execute("SELECT data FROM items WHERE type='element'")
+        rows = c2d.cursor.fetchall()
+
+        self.assertEqual(len(rows), 3)
+
+        imported = [c2d._read_item_data(r['data']) for r in rows]
+        circle_radii = sorted([el['radius'] for el in imported if el.get('geometryType') == 'circle'])
+        self.assertEqual(circle_radii, [1.0])
+
+    def test_min_closed_area_can_be_overridden_to_zero(self):
+        import ezdxf
+
+        doc = ezdxf.new()
+        msp = doc.modelspace()
+        msp.add_line((0, 0), (10, 10))
+        msp.add_lwpolyline([(0, 0), (0.1, 0), (0.1, 0.1), (0, 0.1)], close=True)  # area 0.01
+        msp.add_lwpolyline([(0, 0), (1, 0), (1, 1), (0, 1)], close=True)  # area 1.0
+        msp.add_circle((20, 20), radius=0.1)  # area ~= 0.0314
+        msp.add_circle((30, 30), radius=1.0)  # area ~= 3.1415
+        doc.saveas(self.test_dxf)
+
+        test_args = [
+            "c2d-tool",
+            self.test_c2d,
+            "--min-closed-area-mm2",
+            "0",
+            "--import-to-layer",
+            "TestLayer",
+            self.test_dxf
+        ]
+        with patch.object(sys, 'argv', test_args):
+            main()
+
+        c2d = C2DFile(self.test_c2d)
+        c2d.load()
+        c2d.cursor.execute("SELECT data FROM items WHERE type='element'")
+        rows = c2d.cursor.fetchall()
+
+        self.assertEqual(len(rows), 5)
 
 if __name__ == '__main__':
     unittest.main()

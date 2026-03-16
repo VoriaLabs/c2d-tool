@@ -58,6 +58,7 @@ Operations are generally performed in the order they appear, but `clear-layer` o
 *   `--delete-unused-layers`: Deletes all layers that are not referenced by any toolpath.
 *   `--create-layer <layer_name>`: Creates a new empty layer if it does not exist.
 *   `--import-to-layer <layer_name> <dxf_file>`: Parses the specified DXF file and imports supported entities (LINES, POLYLINES, CIRCLES, ARCS) into the target layer. If the layer does not exist, it will be created.
+*   `--min-closed-area-mm2 <value>`: Sets the minimum area threshold (mm²) for importing closed DXF shapes. Closed shapes smaller than this value are skipped during import. Default: `0.1`.
 
 ### Parameter Operations
 *   `--set-param <key> <value>`: Sets a specific project parameter (e.g., `--set-param display_mm 0`).

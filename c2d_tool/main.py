@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--delete-unused-layers", action="store_true", help="Delete layers not used by any toolpath")
     parser.add_argument("--create-layer", action="append", help="Create a new empty layer")
     parser.add_argument("--import-to-layer", action="append", nargs=2, metavar=('LAYER', 'DXF'), help="Import DXF to layer")
+    parser.add_argument("--min-closed-area-mm2", type=float, default=0.1, help="Minimum area in mm^2 for importing closed DXF shapes (default: 0.1)")
     
     # Parameters
     parser.add_argument("--set-param", action="append", nargs=2, metavar=('KEY', 'VALUE'), help="Set a project parameter")
@@ -138,7 +139,7 @@ def main():
                 
                 # Load DXF
                 try:
-                    elements = importer.load(dxf_path)
+                    elements = importer.load(dxf_path, min_closed_area_mm2=args.min_closed_area_mm2)
                     count = 0
                     for el in elements:
                         c2d.add_element(layer, el)

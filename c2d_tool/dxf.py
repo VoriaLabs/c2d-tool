@@ -2,12 +2,13 @@ import ezdxf
 from ezdxf import path
 from typing import List, Dict, Any
 import math
+import sys
 
 class DXFImporter:
     def __init__(self):
         pass
 
-    def load(self, filepath: str) -> List[Dict[str, Any]]:
+    def load(self, filepath: str, min_closed_area_mm2: float = 0.1) -> List[Dict[str, Any]]:
         """
         Load a DXF file and return a list of C2D element dictionaries.
         """
@@ -23,17 +24,78 @@ class DXFImporter:
 
         # Iterate over supported entities
         for entity in msp:
+            element = None
             if entity.dxftype() == 'LINE':
-                elements.append(self._convert_line(entity))
+                element = self._convert_line(entity)
             elif entity.dxftype() in ('LWPOLYLINE', 'POLYLINE'):
-                elements.append(self._convert_polyline(entity))
+                element = self._convert_polyline(entity)
             elif entity.dxftype() == 'CIRCLE':
-                elements.append(self._convert_circle(entity))
+                element = self._convert_circle(entity)
             elif entity.dxftype() == 'ARC':
-                elements.append(self._convert_arc(entity))
+                element = self._convert_arc(entity)
             # TODO: Add SPLINE support via ezdxf.path
 
-        return [e for e in elements if e is not None]
+            if element is None:
+                continue
+
+            if self._is_closed_shape(entity):
+                area = self._compute_closed_shape_area_mm2(entity)
+                if area < min_closed_area_mm2:
+                    handle = getattr(entity.dxf, 'handle', 'unknown')
+                    print(
+                        f"Skipping closed shape {entity.dxftype()} (handle={handle}): "
+                        f"area {area:.6f} mm^2 is below minimum {min_closed_area_mm2:.6f} mm^2",
+                        file=sys.stderr,
+                    )
+                    continue
+
+            elements.append(element)
+
+        return elements
+
+    def _is_closed_shape(self, entity) -> bool:
+        entity_type = entity.dxftype()
+        if entity_type == 'CIRCLE':
+            return True
+        if entity_type in ('LWPOLYLINE', 'POLYLINE'):
+            return bool(entity.is_closed)
+        return False
+
+    def _compute_closed_shape_area_mm2(self, entity) -> float:
+        entity_type = entity.dxftype()
+
+        if entity_type == 'CIRCLE':
+            radius = float(entity.dxf.radius)
+            return math.pi * radius * radius
+
+        if entity_type in ('LWPOLYLINE', 'POLYLINE'):
+            vertices = self._extract_polyline_vertices(entity)
+            return self._polygon_area_mm2(vertices)
+
+        return 0.0
+
+    def _extract_polyline_vertices(self, entity) -> List[List[float]]:
+        entity_type = entity.dxftype()
+
+        if entity_type == 'LWPOLYLINE':
+            return [[float(x), float(y)] for x, y, *_ in entity.get_points()]
+
+        if entity_type == 'POLYLINE':
+            return [[float(v.dxf.location.x), float(v.dxf.location.y)] for v in entity.vertices]
+
+        return []
+
+    def _polygon_area_mm2(self, vertices: List[List[float]]) -> float:
+        if len(vertices) < 3:
+            return 0.0
+
+        area2 = 0.0
+        for index in range(len(vertices)):
+            x1, y1 = vertices[index]
+            x2, y2 = vertices[(index + 1) % len(vertices)]
+            area2 += (x1 * y2) - (x2 * y1)
+
+        return abs(area2) * 0.5
 
     def _convert_line(self, entity) -> Dict[str, Any]:
         start = entity.dxf.start
