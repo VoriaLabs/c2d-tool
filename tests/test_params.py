@@ -76,5 +76,21 @@ class TestParams(unittest.TestCase):
         self.assertEqual(float(c2d.get_param("width")), 100.0)
         self.assertEqual(float(c2d.get_param("height")), 200.0)
 
+    def test_resize_to_fit_layer_shrinks_when_current_size_is_larger(self):
+        c2d = C2DFile(self.test_c2d)
+        c2d.load()
+        c2d.set_param("width", "500")
+        c2d.set_param("height", "500")
+        c2d.save()
+
+        test_args = ["c2d-tool", self.test_c2d, "--resize-to-fit-layer", "TestLayer"]
+        with patch.object(sys, 'argv', test_args):
+            main()
+
+        c2d = C2DFile(self.test_c2d)
+        c2d.load()
+        self.assertEqual(float(c2d.get_param("width")), 100.0)
+        self.assertEqual(float(c2d.get_param("height")), 200.0)
+
 if __name__ == '__main__':
     unittest.main()

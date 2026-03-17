@@ -200,24 +200,11 @@ class C2DFile:
                 if abs_y > max_y:
                     max_y = abs_y
         
-        # Update params if larger
-        # We assume we want to expand to fit, but maybe we should just set it?
-        # The user said "ensure that it fits".
-        # Let's read current size first.
-        current_width = float(self.get_param('width') or 0)
-        current_height = float(self.get_param('height') or 0)
-        
-        new_width = max(current_width, max_x)
-        new_height = max(current_height, max_y)
-        
-        # Add a small margin? Maybe not unless requested.
-        # But if max_x is exactly on the edge, it might be safer to have a tiny bit more?
-        # Let's stick to exact or max for now.
-        
-        if new_width > current_width:
-            self.set_param('width', str(new_width))
-        if new_height > current_height:
-            self.set_param('height', str(new_height))
+        new_width = max(0.0, max_x)
+        new_height = max(0.0, max_y)
+
+        self.set_param('width', str(new_width))
+        self.set_param('height', str(new_height))
 
     def get_layers_by_name(self, name: str) -> List[Dict]:
         """Return all layers with the given name."""
